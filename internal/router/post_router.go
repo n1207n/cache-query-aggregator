@@ -12,7 +12,7 @@ func SetupPostRoutes(apiGroup *gin.RouterGroup, postHandler *handler.PostHandler
 	}
 
 	// It's common to nest resource routes, e.g., getting posts by a user.
-	userSpecificRoutes := apiGroup.Group("/users/:userId")
+	userSpecificRoutes := apiGroup.Group("/users/:id/")
 	{
 		userSpecificRoutes.GET("/posts", postHandler.ListPostsByUser)
 	}

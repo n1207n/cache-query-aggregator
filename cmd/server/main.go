@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -44,31 +45,39 @@ func main() {
 		log.Fatalf("Failed to initialize Redis: %v", fmt.Errorf("redis address is not configured"))
 	}
 
+	var rdb redis.Cmdable
+	var rdbCloser io.Closer
+
 	if len(redisAddrs) == 1 {
-		rdb, err := initSingleRedis(redisAddrs[0])
+		singleNodeClient, err := initSingleRedis(redisAddrs[0])
 		if err != nil {
 			log.Fatalf("Failed to initialize Single Redis: %v", err)
 		}
-
-		defer rdb.Close()
+		rdb = singleNodeClient
+		rdbCloser = singleNodeClient
 		log.Println("Redis Single client initialized.")
 	} else {
-		rdb, err := initClusterRedis(redisAddrs)
+		clusterClient, err := initClusterRedis(redisAddrs)
 		if err != nil {
 			log.Fatalf("Failed to initialize Cluster Redis: %v", err)
 		}
-
-		defer rdb.Close()
+		rdb = clusterClient
+		rdbCloser = clusterClient
 		log.Println("Redis Cluster client initialized.")
 	}
+	defer func(rdbCloser io.Closer) {
+		_ = rdbCloser.Close()
+	}(rdbCloser)
 
 	sqlcQuerier := sqlc.New(dbPool)
 	log.Println("SQLC Querier initialized.")
 
 	userRepo := repository.NewDBUserRepository(sqlcQuerier)
 	log.Println("User repository initialized.")
-	postRepo := repository.NewDBPostRepository(sqlcQuerier)
-	log.Println("Post repository initialized.")
+	dbPostRepo := repository.NewDBPostRepository(sqlcQuerier)
+	log.Println("Post repository (DB) initialized.")
+	postRepo := repository.NewCachedPostRepository(dbPostRepo, rdb)
+	log.Println("Post repository (Cache) initialized.")
 
 	// Initialize Services
 	userService := service.NewUserService(userRepo) // Example
