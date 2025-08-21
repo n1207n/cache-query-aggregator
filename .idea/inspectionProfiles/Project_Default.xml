@@ -15,6 +15,7 @@
         <method importPath="strings" receiver="*Builder" name="WriteByte" />
         <method importPath="hash" receiver="Hash" name="Write" />
         <method importPath="github.com/go-redis/redis/v8" receiver="*Client" name="Close" />
+        <method importPath="github.com/go-redis/redis/v8" receiver="*ClusterClient" name="Close" />
       </methods>
     </inspection_tool>
     <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">

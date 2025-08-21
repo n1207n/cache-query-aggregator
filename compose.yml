@@ -1,5 +1,10 @@
 volumes:
   postgres_data:
+  redis_data_1:
+  redis_data_2:
+  redis_data_3:
+  redis_data_4:
+  redis_data_5:
 
 networks:
   app-network:
@@ -43,5 +48,55 @@ services:
     image: redis:7-alpine
     ports:
        - "${REDIS_HOST_PORT:-127.0.0.1:6379}:${REDIS_PORT:-6379}"
+    networks:
+      - app-network
+
+  redis-1:
+    image: redis:7.2-alpine
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    ports:
+      - "7001:6379"
+    volumes:
+      - redis_data_1:/data
+    networks:
+      - app-network
+
+  redis-2:
+    image: redis:7.2-alpine
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    ports:
+      - "7002:6379"
+    volumes:
+      - redis_data_2:/data
+    networks:
+    - app-network
+
+  redis-3:
+    image: redis:7.2-alpine
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    ports:
+      - "7003:6379"
+    volumes:
+      - redis_data_3:/data
+    networks:
+    - app-network
+
+  redis-4:
+    image: redis:7.2-alpine
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    ports:
+      - "7004:6379"
+    volumes:
+      - redis_data_4:/data
+    networks:
+    - app-network
+
+  redis-5:
+    image: redis:7.2-alpine
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    ports:
+      - "7005:6379"
+    volumes:
+      - redis_data_5:/data
     networks:
       - app-network

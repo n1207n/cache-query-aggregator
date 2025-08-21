@@ -1,22 +1,16 @@
-# golang-app-scaffold
+# Redis Cluster Query Aggregator
 
-This project is a scaffold for a full-stack application using Go (with Gin framework) for the backend, PostgreSQL as the database, and Redis for caching/session management.
+This project is a sample application demonstrating a query aggregation layer for a Redis Cluster. In a sharded data environment, like social media content partitioned by `userId`, certain partitions can become "hot," receiving a disproportionate amount of traffic. While Redis Cluster handles data sharding, retrieving data that spans multiple shards (e.g., a user's feed composed of content from multiple other users) requires fetching from each shard and merging the results.
 
-It includes Docker setup for containerization and Docker Compose for orchestrating services.
+This application simulates this scenario by storing social media posts in a PostgreSQL database and implementing a caching and query aggregation layer with Redis Cluster.
 
-## Features Implemented
-*   **Backend API**: Built with Go and Gin.
-*   **Database**: PostgreSQL with `pgx` driver.
-*   **ORM/Query Builder**: `sqlc` for generating type-safe Go code from SQL queries.
-*   **Database Migrations**: `golang-migrate/migrate` for managing database schema changes.
-*   **Caching/Session**: Redis client setup.
-*   **Configuration**: Environment variable-based configuration loading.
-*   **User Management**: Basic User model, repository, service, and handlers (CreateUser, GetUserByID).
-*   **Containerization**:
-    *   Multi-stage `Dockerfile` for development (with Air for live reload, Delve for debugging) and production.
-    *   `compose.yml` to run the application, PostgreSQL, and Redis together.
-    *   Entrypoint script (`scripts/entrypoint.sh`) for the production container to check DB connection and run migrations.
-*   **Live Reloading**: `.air.toml` configured for development.
+## Key Concepts Demonstrated
+*   **Query Aggregation**: A service layer that intelligently queries multiple Redis shards and combines the results.
+*   **Hot Partition Simulation**: Demonstrates how to handle scenarios where data for specific user-generated content becomes highly requested.
+*   **Cache Sharding**: Utilizes Redis Cluster for distributed caching.
+*   **Go Backend**: A robust API built with Go, Gin, `sqlc`, and `pgx`.
+*   **Containerized Environment**: Fully containerized setup with Docker and Docker Compose for easy local development and deployment.
+
 
 ## Project Structure (Simplified)
 ```text

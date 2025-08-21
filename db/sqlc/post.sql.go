@@ -36,6 +36,11 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 	return i, err
 }
 
+type CreatePostsInBatchParams struct {
+	UserID  int64  `json:"user_id"`
+	Content string `json:"content"`
+}
+
 const getPost = `-- name: GetPost :one
 SELECT id, user_id, content, created_at, updated_at FROM posts
 WHERE id = $1 LIMIT 1

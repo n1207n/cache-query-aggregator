@@ -20,7 +20,7 @@ func LoadConfig() (*Config, error) {
 		AppEnv:    getEnv("APP_ENV", "development"),
 		AppPort:   getEnvAsInt("APP_PORT", 8080),
 		DbURL:     getEnv("POSTGRES_URL", "postgres://user:password@db:5432/mydatabase?sslmode=disable"),
-		RedisURL:  getEnv("REDIS_URL", "redis://redis:6379/0"),
+		RedisURL:  getEnv("REDIS_CLUSTER_URLS", "redis-1:7001,redis-2:7002,redis-3:7003,redis-4:7004,redis-5:7005"),
 		SecretKey: getEnv("SECRET_KEY", "supersecret"),
 	}, nil
 }

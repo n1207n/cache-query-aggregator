@@ -16,3 +16,11 @@ WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2
 OFFSET $3;
+
+-- name: CreatePostsInBatch :copyfrom
+INSERT INTO posts (
+    user_id,
+    content
+) VALUES (
+    $1, $2
+);

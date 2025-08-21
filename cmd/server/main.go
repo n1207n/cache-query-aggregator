@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/n1207n/cache-query-aggregator/db/sqlc"
 	"github.com/n1207n/cache-query-aggregator/internal/handler"
 	"github.com/n1207n/cache-query-aggregator/internal/repository"
-	app_router "github.com/n1207n/cache-query-aggregator/internal/router"
+	approuter "github.com/n1207n/cache-query-aggregator/internal/router"
 	"github.com/n1207n/cache-query-aggregator/internal/service"
 )
 
@@ -38,12 +39,28 @@ func main() {
 	defer dbPool.Close()
 	log.Println("Database connection pool established.")
 
-	rdb, err := initRedis(cfg.RedisURL)
-	if err != nil {
-		log.Fatalf("Failed to initialize Redis: %v", err)
+	redisAddrs := strings.Split(cfg.RedisURL, ",")
+	if len(redisAddrs) == 0 || redisAddrs[0] == "" {
+		log.Fatalf("Failed to initialize Redis: %v", fmt.Errorf("redis address is not configured"))
 	}
-	defer rdb.Close()
-	log.Println("Redis client initialized.")
+
+	if len(redisAddrs) == 1 {
+		rdb, err := initSingleRedis(redisAddrs[0])
+		if err != nil {
+			log.Fatalf("Failed to initialize Single Redis: %v", err)
+		}
+
+		defer rdb.Close()
+		log.Println("Redis Single client initialized.")
+	} else {
+		rdb, err := initClusterRedis(redisAddrs)
+		if err != nil {
+			log.Fatalf("Failed to initialize Cluster Redis: %v", err)
+		}
+
+		defer rdb.Close()
+		log.Println("Redis Cluster client initialized.")
+	}
 
 	sqlcQuerier := sqlc.New(dbPool)
 	log.Println("SQLC Querier initialized.")
@@ -74,8 +91,8 @@ func main() {
 	// Setup routes
 	v1 := router.Group("/api/v1")
 	{
-		app_router.SetupUserRoutes(v1, userHandler)
-		app_router.SetupPostRoutes(v1, postHandler)
+		approuter.SetupUserRoutes(v1, userHandler)
+		approuter.SetupPostRoutes(v1, postHandler)
 	}
 
 	// Ping route for health check
@@ -138,22 +155,37 @@ func initDB(databaseURL string) (*pgxpool.Pool, error) {
 	return dbPool, nil
 }
 
-func initRedis(redisURL string) (*redis.Client, error) {
+func initSingleRedis(redisURL string) (*redis.Client, error) {
 	var rdb *redis.Client
-
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse Redis URL: %w", err)
 	}
+
 	rdb = redis.NewClient(opt)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = rdb.Ping(ctx).Result()
-	if err != nil {
-		rdb.Close() // Close the client if ping fails
-		return nil, fmt.Errorf("could not ping Redis: %w", err)
+	if _, err := rdb.Ping(ctx).Result(); err != nil {
+		return nil, fmt.Errorf("could not connect to Redis: %w", err)
 	}
+
+	return rdb, nil
+}
+
+func initClusterRedis(redisAddrs []string) (*redis.ClusterClient, error) {
+	var rdb *redis.ClusterClient
+	rdb = redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: redisAddrs,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := rdb.Ping(ctx).Result(); err != nil {
+		return nil, fmt.Errorf("could not connect to Redis: %w", err)
+	}
+
 	return rdb, nil
 }

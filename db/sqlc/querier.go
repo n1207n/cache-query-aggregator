@@ -10,6 +10,7 @@ import (
 
 type Querier interface {
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
+	CreatePostsInBatch(ctx context.Context, arg []CreatePostsInBatchParams) (int64, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteUser(ctx context.Context, id int64) error
 	GetPost(ctx context.Context, id int64) (Post, error)
