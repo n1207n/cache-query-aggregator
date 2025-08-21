@@ -9,10 +9,13 @@ import (
 )
 
 type Querier interface {
+	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteUser(ctx context.Context, id int64) error
+	GetPost(ctx context.Context, id int64) (Post, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	ListPostsByUser(ctx context.Context, arg ListPostsByUserParams) ([]Post, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 }

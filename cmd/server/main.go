@@ -50,10 +50,14 @@ func main() {
 
 	userRepo := repository.NewDBUserRepository(sqlcQuerier)
 	log.Println("User repository initialized.")
+	postRepo := repository.NewDBPostRepository(sqlcQuerier)
+	log.Println("Post repository initialized.")
 
 	// Initialize Services
 	userService := service.NewUserService(userRepo) // Example
 	log.Println("User service initialized.")
+	postService := service.NewPostService(postRepo)
+	log.Println("Post service initialized.")
 
 	// Initialize Gin router
 	if cfg.AppEnv == "production" {
@@ -64,11 +68,14 @@ func main() {
 	// Initialize Handlers
 	userHandler := handler.NewUserHandler(userService)
 	log.Println("User handler initialized.")
+	postHandler := handler.NewPostHandler(postService)
+	log.Println("Post handler initialized.")
 
 	// Setup routes
 	v1 := router.Group("/api/v1")
 	{
 		app_router.SetupUserRoutes(v1, userHandler)
+		app_router.SetupPostRoutes(v1, postHandler)
 	}
 
 	// Ping route for health check
