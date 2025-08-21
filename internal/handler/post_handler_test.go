@@ -95,7 +95,7 @@ func TestPostHandler_ListPostsByUser(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/1/posts", nil)
 		rr := httptest.NewRecorder()
 		router := gin.Default()
-		router.GET("/api/v1/users/:userId/posts", postHandler.ListPostsByUser)
+		router.GET("/api/v1/users/:id/posts", postHandler.ListPostsByUser)
 
 		router.ServeHTTP(rr, req)
 
@@ -114,7 +114,7 @@ func TestPostHandler_ListPostsByUser(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/abc/posts", nil)
 		rr := httptest.NewRecorder()
 		router := gin.Default()
-		router.GET("/api/v1/users/:userId/posts", postHandler.ListPostsByUser)
+		router.GET("/api/v1/users/:id/posts", postHandler.ListPostsByUser)
 
 		router.ServeHTTP(rr, req)
 
