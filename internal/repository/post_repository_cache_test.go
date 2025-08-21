@@ -51,7 +51,7 @@ func TestGetPost_CacheHit(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, post, result)
-	mockRepo.AssertNotCalled(t, "GetPost") // DB는 호출되지 않아야 함
+	mockRepo.AssertNotCalled(t, "GetPost")
 	require.NoError(t, rdbMock.ExpectationsWereMet())
 }
 
@@ -141,7 +141,6 @@ func TestListPostsByUser_PartialCacheHit(t *testing.T) {
 	dbPosts := []sqlc.Post{post1, post2}
 	mockRepo.On("ListPostsByUser", mock.Anything, params).Return(dbPosts, nil)
 
-	// DB에서 가져온 데이터를 캐시에 채우는 파이프라인 명령 모의
 	post2JSON, _ := json.Marshal(post2)
 
 	// Post 1
@@ -169,14 +168,12 @@ func TestListPostsByUser_CacheMiss(t *testing.T) {
 	params := sqlc.ListPostsByUserParams{UserID: 1, Limit: 10, Offset: 0}
 	userPostsKey := fmt.Sprintf(userPostsKeyPattern, params.UserID)
 
-	// ZRevRange가 redis.Nil 또는 빈 슬라이스를 반환하여 캐시 미스 발생
 	rdbMock.ExpectZRevRange(userPostsKey, 0, 9).SetErr(redis.Nil)
 
 	dbPost := sqlc.Post{ID: 1, UserID: 1, Content: "db post", CreatedAt: time.Now()}
 	dbPosts := []sqlc.Post{dbPost}
 	mockRepo.On("ListPostsByUser", mock.Anything, params).Return(dbPosts, nil)
 
-	// 파이프라인으로 캐시 채우는 로직 모의
 	postJSON, _ := json.Marshal(dbPost)
 	rdbMock.ExpectSet(fmt.Sprintf(postKeyGenericPattern, dbPost.ID), postJSON, cacheTTL).SetVal("OK")
 	rdbMock.ExpectZAdd(userPostsKey, &redis.Z{Score: float64(dbPost.CreatedAt.Unix()), Member: dbPost.ID}).SetVal(1)

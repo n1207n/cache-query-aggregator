@@ -17,5 +17,5 @@ sql:
         overrides:
           - db_type: "timestamptz"
             go_type: "time.Time"
-          - db_type: "text" # HashedPassword를 위해
+          - db_type: "text"
             go_type: "string"
