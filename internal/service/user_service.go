@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/yourusername/yourprojectname/db/sqlc"
-	"github.com/yourusername/yourprojectname/internal/repository"
+	"github.com/n1207n/cache-query-aggregator/db/sqlc"
+	"github.com/n1207n/cache-query-aggregator/internal/repository"
 )
 
 // UserService defines the interface for user-related business logic.

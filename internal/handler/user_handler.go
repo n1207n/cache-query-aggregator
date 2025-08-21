@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/yourprojectname/db/sqlc"
-	"github.com/yourusername/yourprojectname/internal/service"
+	"github.com/n1207n/cache-query-aggregator/db/sqlc"
+	"github.com/n1207n/cache-query-aggregator/internal/service"
 )
 
 // UserHandler handles HTTP requests for user resources.

@@ -7,3 +7,5 @@ tmp/
 .idea/
 
 __debug*
+
+coverage-*

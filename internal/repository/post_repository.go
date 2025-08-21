@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/yourusername/yourprojectname/db/sqlc"
+	"github.com/n1207n/cache-query-aggregator/db/sqlc"
 )
 
 type PostRepository interface {

@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/yourprojectname/internal/handler"
+	"github.com/n1207n/cache-query-aggregator/internal/handler"
 )
 
 func SetupPostRoutes(apiGroup *gin.RouterGroup, postHandler *handler.PostHandler) {

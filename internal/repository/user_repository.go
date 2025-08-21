@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/yourusername/yourprojectname/db/sqlc"
-	"github.com/yourusername/yourprojectname/internal/util"
+	"github.com/n1207n/cache-query-aggregator/db/sqlc"
+	"github.com/n1207n/cache-query-aggregator/internal/util"
 )
 
 // UserRepository defines methods for users table

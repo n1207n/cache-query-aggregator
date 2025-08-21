@@ -14,12 +14,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/yourusername/yourprojectname/config"
-	"github.com/yourusername/yourprojectname/db/sqlc"
-	"github.com/yourusername/yourprojectname/internal/handler"
-	"github.com/yourusername/yourprojectname/internal/repository"
-	app_router "github.com/yourusername/yourprojectname/internal/router"
-	"github.com/yourusername/yourprojectname/internal/service"
+	"github.com/n1207n/cache-query-aggregator/config"
+	"github.com/n1207n/cache-query-aggregator/db/sqlc"
+	"github.com/n1207n/cache-query-aggregator/internal/handler"
+	"github.com/n1207n/cache-query-aggregator/internal/repository"
+	app_router "github.com/n1207n/cache-query-aggregator/internal/router"
+	"github.com/n1207n/cache-query-aggregator/internal/service"
 )
 
 func main() {
