@@ -1,0 +1,19 @@
+services:
+  app:
+    extends:
+      file: compose.yml
+      service: app
+    build:
+     target: dev-common
+    command: ["sh", "-c", "dlv debug cmd/server/main.go --headless --listen=:2345 --api-version=2 --accept-multiclient"]
+    ports:
+      # Delve debugger port
+      - "2345:2345"
+    volumes:
+      - .:/app
+    environment:
+      GIN_MODE: debug
+    security_opt:
+      - "seccomp:unconfined"
+    cap_add:
+      - SYS_PTRACE

@@ -1,0 +1,12 @@
+services:
+  app:
+    extends:
+      file: compose.yml
+      service: app
+    build:
+     target: dev-common
+    command: ["air", "-c", ".air.toml"]
+    volumes:
+      - .:/app
+    environment:
+      GIN_MODE: debug

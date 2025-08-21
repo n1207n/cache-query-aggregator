@@ -1,0 +1,63 @@
+# Git files
+.git
+.gitignore
+
+# Docker files - prevent recursive inclusion if context is '.'
+# Keep Dockerfile and compose files out of the context if they are not needed inside the image itself.
+# Dockerfile # This file is used to build, so it's part of the context by definition.
+# compose.yml
+# compose.*.yml
+# .dockerignore # This file itself.
+
+# IDE and editor specific files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+
+# Local Go build cache, artifacts, and vendor directory (if not using modules strictly)
+bin/
+vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+tmp/
+temp/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Log files (unless they are meant to be part of the image)
+*.log
+air_errors.log
+
+# Environment files - .env files should NOT be copied into the image.
+# Configuration should be passed via environment variables at runtime.
+.env
+.env.*
+# Allow .env.example as it's a template and might be useful for documentation or reference.
+!/.env.example
+
+# Test files and coverage reports (if not running tests inside Docker during build)
+*_test.go
+coverage.out
+coverage.html
+
+# Node.js dependencies (if you have a frontend part not handled by Go build)
+node_modules/
+
+# Air configuration file is needed if 'air' is run inside the container.
+# If .air.toml is at the root and `COPY . .` is used, it will be included.
+# So, do not ignore it if used by `dev-common` target.
+# .air.toml
+
+# Any other local files or directories not needed in the build context
+# Example:
+# my_local_secrets/
+# large_asset_source_files/
