@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/n1207n/cache-query-aggregator/db/sqlc"
+	"github.com/n1207n/cache-query-aggregator/internal/metrics"
 )
 
 const (
@@ -55,6 +56,8 @@ func (r *CachedPostRepository) GetPost(ctx context.Context, id int64) (sqlc.Post
 		// Cache hit
 		var post sqlc.Post
 		if err := json.Unmarshal([]byte(val), &post); err == nil {
+			log.Printf("cache hit for post %d", id)
+			metrics.PostCacheHits.Inc()
 			return post, nil
 		}
 		log.Printf("failed to unmarshal cached post %d: %v", id, err)
@@ -64,6 +67,10 @@ func (r *CachedPostRepository) GetPost(ctx context.Context, id int64) (sqlc.Post
 		log.Printf("redis error on getting post %d: %v", id, err)
 	}
 
+	// Cache miss
+	log.Printf("cache miss for post %d, fetching from db", id)
+	metrics.PostCacheMisses.Inc()
+	metrics.PostDBQueries.Inc()
 	post, err := r.nextRepo.GetPost(ctx, id)
 	if err != nil {
 		return sqlc.Post{}, err
@@ -85,15 +92,26 @@ func (r *CachedPostRepository) ListPostsByUser(ctx context.Context, arg sqlc.Lis
 	if err == nil && len(postIDStrs) > 0 {
 		posts, missedIDs := r.getPostsFromCache(ctx, postIDStrs)
 		if len(missedIDs) == 0 {
+			log.Printf("full cache hit for user %d posts list (offset: %d, limit: %d)", arg.UserID, arg.Offset, arg.Limit)
+			metrics.PostCacheHits.Inc()
 			return posts, nil
 		}
-		log.Printf("partial cache hit for user %d. Missed %d posts.", arg.UserID, len(missedIDs))
+		// Partial cache hit, a.k.a shard join
+		log.Printf("partial cache hit for user %d. Missed %d posts. Fetching full list from DB.", arg.UserID, len(missedIDs))
+		metrics.PostCacheShardJoins.Inc()
 	}
 
 	if err != nil && err != redis.Nil {
 		log.Printf("redis error on getting post list for user %d: %v", arg.UserID, err)
 	}
 
+	// Full cache miss
+	if err == redis.Nil || len(postIDStrs) == 0 {
+		log.Printf("full cache miss for user %d posts list, fetching from db", arg.UserID)
+		metrics.PostCacheMisses.Inc()
+	}
+
+	metrics.PostDBQueries.Inc()
 	posts, err := r.nextRepo.ListPostsByUser(ctx, arg)
 	if err != nil {
 		return nil, err

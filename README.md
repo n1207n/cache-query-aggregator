@@ -91,7 +91,7 @@ You can then attach your Go IDE's debugger to localhost:2345.
 ### 4. Set up redis cluster
 Run this command once after docker compose is running to create a redis cluster 
 ```bash
-docker compose exec redis-1 redis-cli --cluster create redis-1:6379 redis-2:6379 redis-3:6379 redis-4:6379 redis-5:6379 --cluster-replicas 0 --cluster-yes
+docker compose exec redis-1 redis-cli --cluster create 173.18.0.2:6379 173.18.0.3:6379 173.18.0.4:6379 173.18.0.5:6379 173.18.0.6:6379 --cluster-replicas 0 --cluster-yes
 ```
 
 ## Database Migrations (golang-migrate/migrate)

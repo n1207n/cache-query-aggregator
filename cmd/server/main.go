@@ -22,6 +22,7 @@ import (
 	"github.com/n1207n/cache-query-aggregator/internal/repository"
 	approuter "github.com/n1207n/cache-query-aggregator/internal/router"
 	"github.com/n1207n/cache-query-aggregator/internal/service"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -109,6 +110,9 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
 
+	// Metrics route
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.AppPort),
 		Handler: router,
@@ -189,7 +193,7 @@ func initClusterRedis(redisAddrs []string) (*redis.ClusterClient, error) {
 		Addrs: redisAddrs,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	if _, err := rdb.Ping(ctx).Result(); err != nil {

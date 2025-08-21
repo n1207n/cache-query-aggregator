@@ -55,7 +55,7 @@ sqlc:
 
 # Docker commands
 DOCKER_COMPOSE_FILE=compose.yml:compose.dev.yml
-DOCKER_IMAGE_NAME=yourprojectname # Change this to your desired image name
+DOCKER_IMAGE_NAME=cache-query-aggregator # Change this to your desired image name
 
 docker-build:
 	@echo "Building Docker image..."
