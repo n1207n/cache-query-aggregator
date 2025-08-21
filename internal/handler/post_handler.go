@@ -60,6 +60,13 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
+type PaginatedPostsResponse struct {
+	Data    []PostResponse `json:"data"`
+	HasMore bool           `json:"has_more"`
+	Limit   int            `json:"limit"`
+	Offset  int            `json:"offset"`
+}
+
 func (h *PostHandler) ListPostsByUser(c *gin.Context) {
 	userIDStr := c.Param("id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -71,9 +78,10 @@ func (h *PostHandler) ListPostsByUser(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
+	// Fetch limit + 1 items to check if there is a next page.
 	params := sqlc.ListPostsByUserParams{
 		UserID: userID,
-		Limit:  int32(limit),
+		Limit:  int32(limit + 1),
 		Offset: int32(offset),
 	}
 
@@ -83,9 +91,15 @@ func (h *PostHandler) ListPostsByUser(c *gin.Context) {
 		return
 	}
 
-	var res []PostResponse
+	hasMore := false
+	if len(posts) > limit {
+		hasMore = true
+		posts = posts[:limit] // Trim the extra item
+	}
+
+	var postResponses []PostResponse
 	for _, post := range posts {
-		res = append(res, PostResponse{
+		postResponses = append(postResponses, PostResponse{
 			ID:        post.ID,
 			UserID:    post.UserID,
 			Content:   post.Content,
@@ -94,5 +108,10 @@ func (h *PostHandler) ListPostsByUser(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, PaginatedPostsResponse{
+		Data:    postResponses,
+		HasMore: hasMore,
+		Limit:   limit,
+		Offset:  offset,
+	})
 }

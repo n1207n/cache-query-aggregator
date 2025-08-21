@@ -101,11 +101,11 @@ func TestPostHandler_ListPostsByUser(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resPosts []PostResponse
-		err := json.Unmarshal(rr.Body.Bytes(), &resPosts)
+		var res PaginatedPostsResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &res)
 		assert.NoError(t, err)
-		assert.Len(t, resPosts, 2)
-		assert.Equal(t, expectedPosts[0].Content, resPosts[0].Content)
+		assert.Len(t, res.Data, 2)
+		assert.Equal(t, expectedPosts[0].Content, res.Data[0].Content)
 
 		mockService.AssertExpectations(t)
 	})

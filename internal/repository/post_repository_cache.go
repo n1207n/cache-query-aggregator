@@ -12,6 +12,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/n1207n/cache-query-aggregator/db/sqlc"
 	"github.com/n1207n/cache-query-aggregator/internal/metrics"
+	crc16_redis "github.com/sigurn/crc16"
 )
 
 const (
@@ -20,18 +21,34 @@ const (
 	cacheTTL              = 1 * time.Hour
 )
 
+var crc16Table = crc16_redis.MakeTable(crc16_redis.CRC16_XMODEM)
+
 // CachedPostRepository is a cache decorator for PostRepository
 type CachedPostRepository struct {
-	nextRepo PostRepository
-	rdb      redis.Cmdable
+	nextRepo      PostRepository
+	rdb           redis.Cmdable
+	clusterClient *redis.ClusterClient
+	slotMap       map[uint16]string // slot -> node address
+	slotMapMux    sync.RWMutex
 }
 
 // NewCachedPostRepository creates a new instance of CachedPostRepository
 func NewCachedPostRepository(next PostRepository, rdb redis.Cmdable) PostRepository {
-	return &CachedPostRepository{
+	repo := &CachedPostRepository{
 		nextRepo: next,
 		rdb:      rdb,
 	}
+
+	if clusterClient, ok := rdb.(*redis.ClusterClient); ok {
+		repo.clusterClient = clusterClient
+		if err := repo.refreshSlotCache(context.Background()); err != nil {
+			log.Printf("failed to initialize redis cluster slot cache: %v", err)
+		} else {
+			log.Println("Redis cluster slot cache initialized successfully.")
+		}
+	}
+
+	return repo
 }
 
 // CreatePost creates a Post table record and pushes it into cache
@@ -91,7 +108,7 @@ func (r *CachedPostRepository) ListPostsByUser(ctx context.Context, arg sqlc.Lis
 	postIDStrs, err := r.rdb.ZRevRange(ctx, userPostsKey, start, stop).Result()
 
 	if err == nil && len(postIDStrs) > 0 {
-		posts, missedIDs := r.getPostsFromCache(ctx, postIDStrs)
+		posts, missedIDs := r.getPostsFromCache(ctx, arg.UserID, postIDStrs)
 		if len(missedIDs) == 0 {
 			log.Printf("full cache hit for user %d posts list (offset: %d, limit: %d)", arg.UserID, arg.Offset, arg.Limit)
 			metrics.PostCacheHits.Inc()
@@ -127,7 +144,7 @@ func (r *CachedPostRepository) ListPostsByUser(ctx context.Context, arg sqlc.Lis
 	return posts, nil
 }
 
-func (r *CachedPostRepository) getPostsFromCache(ctx context.Context, postIDStrs []string) ([]sqlc.Post, []int64) {
+func (r *CachedPostRepository) getPostsFromCache(ctx context.Context, userID int64, postIDStrs []string) ([]sqlc.Post, []int64) {
 	if len(postIDStrs) == 0 {
 		return []sqlc.Post{}, nil
 	}
@@ -148,6 +165,17 @@ func (r *CachedPostRepository) getPostsFromCache(ctx context.Context, postIDStrs
 		go func(postID int64) {
 			defer wg.Done()
 			postKey := fmt.Sprintf(postKeyGenericPattern, postID)
+
+			if r.clusterClient != nil {
+				r.slotMapMux.RLock()
+				// CRC16 Checksum as per Redis spec for cluster key hashing.
+				slot := crc16_redis.Checksum([]byte(postKey), crc16Table) & 0x3FFF
+				if nodeAddr, ok := r.slotMap[slot]; ok {
+					metrics.RedisNodeReadsByUser.WithLabelValues(nodeAddr, strconv.FormatInt(userID, 10)).Inc()
+				}
+				r.slotMapMux.RUnlock()
+			}
+
 			val, err := r.rdb.Get(ctx, postKey).Result()
 			if err != nil {
 				ch <- result{id: postID, err: err}
@@ -180,6 +208,29 @@ func (r *CachedPostRepository) getPostsFromCache(ctx context.Context, postIDStrs
 	}
 
 	return posts, missedIDs
+}
+
+func (r *CachedPostRepository) refreshSlotCache(ctx context.Context) error {
+	r.slotMapMux.Lock()
+	defer r.slotMapMux.Unlock()
+
+	slots, err := r.clusterClient.ClusterSlots(ctx).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get cluster slots: %w", err)
+	}
+
+	newSlotMap := make(map[uint16]string)
+	for _, slotRange := range slots {
+		for i := slotRange.Start; i <= slotRange.End; i++ {
+			// Map to the master node address
+			if len(slotRange.Nodes) > 0 {
+				newSlotMap[uint16(i)] = slotRange.Nodes[0].Addr
+			}
+		}
+	}
+
+	r.slotMap = newSlotMap
+	return nil
 }
 
 // cachePost caches a single Post object and add it into user's post list as sorted set
