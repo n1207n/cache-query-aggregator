@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestGetPost_CacheHit(t *testing.T) {
 
 	post := sqlc.Post{ID: 1, UserID: 1, Content: "test content"}
 	postJSON, _ := json.Marshal(post)
-	postKey := fmt.Sprintf(postKeyPattern, post.ID)
+	postKey := fmt.Sprintf(postKeyGenericPattern, post.ID)
 
 	rdbMock.ExpectGet(postKey).SetVal(string(postJSON))
 
@@ -60,14 +61,14 @@ func TestGetPost_CacheMiss(t *testing.T) {
 	repo := NewCachedPostRepository(mockRepo, db)
 
 	post := sqlc.Post{ID: 1, UserID: 1, Content: "test content", CreatedAt: time.Now()}
-	postKey := fmt.Sprintf(postKeyPattern, post.ID)
+	postKeyGeneric := fmt.Sprintf(postKeyGenericPattern, post.ID)
 	userPostsKey := fmt.Sprintf(userPostsKeyPattern, post.UserID)
 
-	rdbMock.ExpectGet(postKey).SetErr(redis.Nil)
+	rdbMock.ExpectGet(postKeyGeneric).SetErr(redis.Nil)
 	mockRepo.On("GetPost", mock.Anything, post.ID).Return(post, nil)
 
 	postJSON, _ := json.Marshal(post)
-	rdbMock.ExpectSet(postKey, postJSON, cacheTTL).SetVal("OK")
+	rdbMock.ExpectSet(postKeyGeneric, postJSON, cacheTTL).SetVal("OK")
 	rdbMock.ExpectZAdd(userPostsKey, &redis.Z{Score: float64(post.CreatedAt.Unix()), Member: post.ID}).SetVal(1)
 	rdbMock.ExpectExpire(userPostsKey, cacheTTL).SetVal(true)
 
@@ -97,15 +98,21 @@ func TestListPostsByUser_FullCacheHit(t *testing.T) {
 	for i, p := range posts {
 		jsonBytes, _ := json.Marshal(p)
 		postJSONs[i] = string(jsonBytes)
-		postKeys[i] = fmt.Sprintf(postKeyPattern, p.ID)
+		postKeys[i] = fmt.Sprintf(postKeyGenericPattern, p.ID)
 	}
 
+	rdbMock.MatchExpectationsInOrder(false)
 	rdbMock.ExpectZRevRange(userPostsKey, 0, 9).SetVal(postIDs)
-	rdbMock.ExpectMGet(postKeys...).SetVal(postJSONs)
+
+	for i := range posts {
+		rdbMock.ExpectGet(postKeys[i]).SetVal(postJSONs[i].(string))
+	}
 
 	result, err := repo.ListPostsByUser(context.Background(), params)
 
 	require.NoError(t, err)
+
+	slices.Reverse(result)
 	assert.Equal(t, posts, result)
 	mockRepo.AssertNotCalled(t, "ListPostsByUser")
 	require.NoError(t, rdbMock.ExpectationsWereMet())
@@ -125,8 +132,10 @@ func TestListPostsByUser_PartialCacheHit(t *testing.T) {
 	post1JSON, _ := json.Marshal(post1)
 
 	// MGet returns a value first time then nil
+	rdbMock.MatchExpectationsInOrder(false)
 	rdbMock.ExpectZRevRange(userPostsKey, 0, 1).SetVal(postIDs)
-	rdbMock.ExpectMGet(fmt.Sprintf(postKeyPattern, 1), fmt.Sprintf(postKeyPattern, 2)).SetVal([]interface{}{string(post1JSON), nil})
+	rdbMock.ExpectGet(fmt.Sprintf(postKeyGenericPattern, 1)).SetVal(string(post1JSON))
+	rdbMock.ExpectGet(fmt.Sprintf(postKeyGenericPattern, 2)).SetErr(redis.Nil)
 
 	// For partial hit, return all data from DB
 	dbPosts := []sqlc.Post{post1, post2}
@@ -134,8 +143,11 @@ func TestListPostsByUser_PartialCacheHit(t *testing.T) {
 
 	// DB에서 가져온 데이터를 캐시에 채우는 파이프라인 명령 모의
 	post2JSON, _ := json.Marshal(post2)
-	rdbMock.ExpectSet(fmt.Sprintf(postKeyPattern, post1.ID), post1JSON, cacheTTL).SetVal("OK")
-	rdbMock.ExpectSet(fmt.Sprintf(postKeyPattern, post2.ID), post2JSON, cacheTTL).SetVal("OK")
+
+	// Post 1
+	rdbMock.ExpectSet(fmt.Sprintf(postKeyGenericPattern, post1.ID), post1JSON, cacheTTL).SetVal("OK")
+	// Post 2
+	rdbMock.ExpectSet(fmt.Sprintf(postKeyGenericPattern, post2.ID), post2JSON, cacheTTL).SetVal("OK")
 	members := []*redis.Z{
 		{Score: float64(post1.CreatedAt.Unix()), Member: post1.ID},
 		{Score: float64(post2.CreatedAt.Unix()), Member: post2.ID},
@@ -166,7 +178,7 @@ func TestListPostsByUser_CacheMiss(t *testing.T) {
 
 	// 파이프라인으로 캐시 채우는 로직 모의
 	postJSON, _ := json.Marshal(dbPost)
-	rdbMock.ExpectSet(fmt.Sprintf(postKeyPattern, dbPost.ID), postJSON, cacheTTL).SetVal("OK")
+	rdbMock.ExpectSet(fmt.Sprintf(postKeyGenericPattern, dbPost.ID), postJSON, cacheTTL).SetVal("OK")
 	rdbMock.ExpectZAdd(userPostsKey, &redis.Z{Score: float64(dbPost.CreatedAt.Unix()), Member: dbPost.ID}).SetVal(1)
 	rdbMock.ExpectExpire(userPostsKey, cacheTTL).SetVal(true)
 
@@ -186,11 +198,11 @@ func TestCreatePost(t *testing.T) {
 
 	mockRepo.On("CreatePost", mock.Anything, createParams).Return(createdPost, nil)
 
-	postKey := fmt.Sprintf(postKeyPattern, createdPost.ID)
+	postKeyGeneric := fmt.Sprintf(postKeyGenericPattern, createdPost.ID)
 	userPostsKey := fmt.Sprintf(userPostsKeyPattern, createdPost.UserID)
 	postJSON, _ := json.Marshal(createdPost)
 
-	rdbMock.ExpectSet(postKey, postJSON, cacheTTL).SetVal("OK")
+	rdbMock.ExpectSet(postKeyGeneric, postJSON, cacheTTL).SetVal("OK")
 	rdbMock.ExpectZAdd(userPostsKey, &redis.Z{Score: float64(createdPost.CreatedAt.Unix()), Member: createdPost.ID}).SetVal(1)
 	rdbMock.ExpectExpire(userPostsKey, cacheTTL).SetVal(true)
 

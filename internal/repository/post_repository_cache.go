@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -14,9 +15,9 @@ import (
 )
 
 const (
-	userPostsKeyPattern = "{user:%d}:posts"
-	postKeyPattern      = "post:%d"
-	cacheTTL            = 1 * time.Hour
+	userPostsKeyPattern   = "{user:%d}:posts"
+	postKeyGenericPattern = "post:%d"
+	cacheTTL              = 1 * time.Hour
 )
 
 // CachedPostRepository is a cache decorator for PostRepository
@@ -49,7 +50,7 @@ func (r *CachedPostRepository) CreatePost(ctx context.Context, arg sqlc.CreatePo
 
 // GetPost reads Post from cache first then DB
 func (r *CachedPostRepository) GetPost(ctx context.Context, id int64) (sqlc.Post, error) {
-	postKey := fmt.Sprintf(postKeyPattern, id)
+	postKey := fmt.Sprintf(postKeyGenericPattern, id)
 	val, err := r.rdb.Get(ctx, postKey).Result()
 
 	if err == nil {
@@ -131,39 +132,51 @@ func (r *CachedPostRepository) getPostsFromCache(ctx context.Context, postIDStrs
 		return []sqlc.Post{}, nil
 	}
 
-	postKeys := make([]string, len(postIDStrs))
-	postIDMap := make(map[string]int64, len(postIDStrs))
-	for i, idStr := range postIDStrs {
+	type result struct {
+		post sqlc.Post
+		err  error
+		id   int64
+	}
+
+	var wg sync.WaitGroup
+	ch := make(chan result, len(postIDStrs))
+
+	for _, idStr := range postIDStrs {
+		wg.Add(1)
 		id, _ := strconv.ParseInt(idStr, 10, 64)
-		postKeys[i] = fmt.Sprintf(postKeyPattern, id)
-		postIDMap[postKeys[i]] = id
+
+		go func(postID int64) {
+			defer wg.Done()
+			postKey := fmt.Sprintf(postKeyGenericPattern, postID)
+			val, err := r.rdb.Get(ctx, postKey).Result()
+			if err != nil {
+				ch <- result{id: postID, err: err}
+				return
+			}
+
+			var post sqlc.Post
+			if err = json.Unmarshal([]byte(val), &post); err != nil {
+				ch <- result{id: postID, err: err}
+				return
+			}
+			ch <- result{id: postID, post: post, err: nil}
+		}(id)
 	}
 
-	vals, err := r.rdb.MGet(ctx, postKeys...).Result()
-	if err != nil {
-		log.Printf("MGet failed for keys %v: %v", postKeys, err)
-		var allIDs []int64
-		for _, id := range postIDMap {
-			allIDs = append(allIDs, id)
-		}
-		return nil, allIDs
-	}
+	wg.Wait()
+	close(ch)
 
-	posts := make([]sqlc.Post, 0, len(vals))
-	var missedIDs []int64
-
-	for i, val := range vals {
-		if val == nil {
-			missedIDs = append(missedIDs, postIDMap[postKeys[i]])
+	posts := make([]sqlc.Post, 0, len(postIDStrs))
+	missedIDs := make([]int64, 0)
+	for res := range ch {
+		if res.err != nil {
+			missedIDs = append(missedIDs, res.id)
+			if res.err != redis.Nil {
+				log.Printf("failed to get or unmarshal post %d from cache: %v", res.id, res.err)
+			}
 			continue
 		}
-		var post sqlc.Post
-		if err := json.Unmarshal([]byte(val.(string)), &post); err != nil {
-			log.Printf("failed to unmarshal cached post for key %s: %v", postKeys[i], err)
-			missedIDs = append(missedIDs, postIDMap[postKeys[i]])
-			continue
-		}
-		posts = append(posts, post)
+		posts = append(posts, res.post)
 	}
 
 	return posts, missedIDs
@@ -171,24 +184,30 @@ func (r *CachedPostRepository) getPostsFromCache(ctx context.Context, postIDStrs
 
 // cachePost caches a single Post object and add it into user's post list as sorted set
 func (r *CachedPostRepository) cachePost(ctx context.Context, post *sqlc.Post) error {
-	postKey := fmt.Sprintf(postKeyPattern, post.ID)
 	postJSON, err := json.Marshal(post)
 	if err != nil {
 		return fmt.Errorf("failed to marshal post %d: %w", post.ID, err)
 	}
 
-	if err := r.rdb.Set(ctx, postKey, postJSON, cacheTTL).Err(); err != nil {
-		return fmt.Errorf("failed to SET post %d: %w", post.ID, err)
-	}
+	pipe := r.rdb.Pipeline()
 
+	// Cache with a generic key for direct GetPost access
+	postKeyGeneric := fmt.Sprintf(postKeyGenericPattern, post.ID)
+	pipe.Set(ctx, postKeyGeneric, postJSON, cacheTTL)
+
+	// Add post ID to the user's sorted set of posts
 	userPostsKey := fmt.Sprintf(userPostsKeyPattern, post.UserID)
-	if err := r.rdb.ZAdd(ctx, userPostsKey, &redis.Z{
+	pipe.ZAdd(ctx, userPostsKey, &redis.Z{
 		Score:  float64(post.CreatedAt.Unix()),
 		Member: post.ID,
-	}).Err(); err != nil {
-		return fmt.Errorf("failed to ZADD post %d to user %d list: %w", post.ID, post.UserID, err)
+	})
+	pipe.Expire(ctx, userPostsKey, cacheTTL)
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("pipeline execution failed for caching post %d: %w", post.ID, err)
 	}
-	return r.rdb.Expire(ctx, userPostsKey, cacheTTL).Err()
+
+	return nil
 }
 
 // cachePostList caches multiple Posts and their ids
@@ -202,13 +221,16 @@ func (r *CachedPostRepository) cachePostList(ctx context.Context, userID int64, 
 
 	redisZMembers := make([]*redis.Z, len(posts))
 	for i, p := range posts {
-		postKey := fmt.Sprintf(postKeyPattern, p.ID)
 		postJSON, err := json.Marshal(p)
 		if err != nil {
 			log.Printf("failed to marshal post %d for batch cache: %v", p.ID, err)
 			continue
 		}
-		pipe.Set(ctx, postKey, postJSON, cacheTTL)
+
+		// Set generic key for direct access
+		postKeyGeneric := fmt.Sprintf(postKeyGenericPattern, p.ID)
+		pipe.Set(ctx, postKeyGeneric, postJSON, cacheTTL)
+
 		redisZMembers[i] = &redis.Z{Score: float64(p.CreatedAt.Unix()), Member: p.ID}
 	}
 
