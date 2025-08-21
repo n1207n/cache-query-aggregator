@@ -1,6 +1,6 @@
 # Redis Cluster Query Aggregator
 
-This project is a sample application demonstrating a query aggregation layer for a Redis Cluster. In a sharded data environment, like social media content partitioned by `userId`, certain partitions can become "hot," receiving a disproportionate amount of traffic. While Redis Cluster handles data sharding, retrieving data that spans multiple shards (e.g., a user's feed composed of content from multiple other users) requires fetching from each shard and merging the results.
+This project is a sample application demonstrating a query aggregation layer for a Redis Cluster. In a sharded data environment, like social media feed partitioned by `userId` and social media post partitioned by `postId`, certain partitions can become "hot," receiving a disproportionate amount of traffic. While Redis Cluster handles data sharding, retrieving data that spans multiple shards (e.g., a user's feed composed of content from multiple other users) requires fetching from each shard and merging the results.
 
 This application simulates this scenario by storing social media posts in a PostgreSQL database and implementing a caching and query aggregation layer with Redis Cluster.
 
@@ -149,17 +149,11 @@ docker compose exec app sqlc generate --path /app/sqlc.yaml
 The generated Go files will be placed in `db/sqlc/` as specified in `sqlc.yaml`. Remember to commit these generated files to your repository.
 
 ## API Endpoints
-Currently implemented user endpoints (base path /api/v1):
-- POST /users: Create a new user.
-- GET /users/:id: Get a user by their ID.
-
-(More to be added)
-
-Future Work / Enhancements
-- Implement full CRUD operations for users.
-- Add authentication (e.g., JWT).
-- Implement authorization/roles.
-- Add more services and features.
-- Write unit and integration tests.
-- Set up CI/CD pipeline.
-- Improve error handling and logging.
+Currently implemented user endpoints:
+- POST /api/v1/users: Create a new user.
+- GET /api/v1/users/:id: Get a user by their ID.
+- GET /api/v1/users/:id/posts: Get a paginated list of posts by user ID
+- POST /api/v1/posts: Create a new post.
+- GET /api/v1/posts/:id: Get a user by their ID.
+- GET /ping: Healthcheck
+- GET /metrics: Prometheus metrics log dumps
